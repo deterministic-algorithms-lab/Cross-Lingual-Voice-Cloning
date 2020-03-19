@@ -390,7 +390,7 @@ class Decoder(nn.Module):
         assert len(list(decoder_inputs.size()))==3
         to_append = torch.cat([self.speaker_embeds[speaker], self.lang_embeds[lang]], dim=-1)        
         to_append = to_append.repeat(decoder_inputs.shape[2],1,1).transpose(0,1).transpose(1,2)
-        return torch.cat([decoder_inputs, to_aapend], dim=1)
+        return torch.cat([decoder_inputs, to_append], dim=1)
 
     def forward(self, memory, decoder_inputs, memory_lengths, speaker, lang):
         """ Decoder forward pass for training
