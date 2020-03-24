@@ -47,6 +47,7 @@ class Tacotron2Loss(nn.Module):
             nn.MSELoss()(mel_out_postnet, mel_target)
         gate_loss = nn.BCEWithLogitsLoss()(gate_out, gate_target)
         
+        encoder_outputs.register_hook(lambda x : return -x)
         speaker_log_probs = speaker_classifier(encoder_outputs, text_lengths)
         speaker_loss = torch.sum(speaker_log_probs)
         return (mel_loss + gate_loss) + 0.02*speaker_loss
