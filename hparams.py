@@ -90,7 +90,13 @@ def create_hparams(hparams_string=None, verbose=False):
         speaker_embedding_dim = 64
         lang_embedding_dim = 3
         n_langs = 2
-        n_speakers = 6
+        n_speakers = 6,
+
+        ###############################
+        ## Speaker Classifier Params ##
+        ###############################
+        hidden_sc_dim=256,
+
     )
 
     if hparams_string:
