@@ -1,7 +1,7 @@
 class residual_encoder(nn.Module) :
-  '''
-  Neural network that can be used to parametrize q(z_{l}|x) and q(z_{o}|x)
-  '''
+    '''
+    Neural network that can be used to parametrize q(z_{l}|x) and q(z_{o}|x)
+    '''
     def __init__(self, hparams):
         super(residual_encoder, self).__init__()
         self.conv1 = nn.Conv1d(hparams.n_mel_channels, 512, 3, 1)
