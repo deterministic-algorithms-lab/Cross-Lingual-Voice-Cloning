@@ -97,6 +97,11 @@ def create_hparams(hparams_string=None, verbose=False):
         ###############################
         hidden_sc_dim=256,
 
+        ##############################
+        ## Residual Encoder Params  ##
+        ##############################
+        residual_encoding_dim = 32          #16 for q(z_l|X) and 16 for q(z_o|X)
+
     )
 
     if hparams_string:

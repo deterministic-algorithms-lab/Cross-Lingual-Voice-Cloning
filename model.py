@@ -5,7 +5,7 @@ from torch import nn
 from torch.nn import functional as F
 from layers import ConvNorm, LinearNorm
 from utils import to_gpu, get_mask_from_lengths
-
+from residual_encoder import residual_encoders
 
 class LocationLayer(nn.Module):
     def __init__(self, attention_n_filters, attention_kernel_size,
@@ -218,9 +218,12 @@ class Decoder(nn.Module):
         self.speaker_embedding_dim = hparams.encoder_embedding_dim
         self.lang_embedding_dim = hparams.lang_embedding_dim
 
+        self.resdiual_encoding_dim = hparams.resdiual_encoding_dim
+
         self.prenet = Prenet(
             hparams.n_mel_channels * hparams.n_frames_per_step \
-            + hparams.lang_embedding_dim + hparams.speaker_embedding_dim,
+            + hparams.lang_embedding_dim + hparams.speaker_embedding_dim \
+            + hparams.residual_encoding_dim,
             [hparams.prenet_dim, hparams.prenet_dim])
 
         self.attention_rnn = nn.LSTMCell(
@@ -247,6 +250,8 @@ class Decoder(nn.Module):
         self.speaker_embeds = nn.Embedding(hparams.n_speakers, hparams.speaker_embedding_dim)
         
         self.lang_embeds = nn.Embedding(hparams.n_langs, hparams.lang_embedding_dim)
+
+        self.residual_encoder = residual_encoders(hparams)
 
     def get_go_frame(self, memory):
         """ Gets all zeros frames to use as first decoder input
@@ -386,9 +391,15 @@ class Decoder(nn.Module):
         gate_prediction = self.gate_layer(decoder_hidden_attention_context)
         return decoder_output, gate_prediction, self.attention_weights
 
-    def concat_speaker_lang_embeds(self, decoder_inputs, speaker, lang) :
+    def concat_speaker_lang_res_embeds(self, decoder_inputs, speaker, lang, residual_encoding) :
+        '''
+        decoder_inputs = [batch_size, n_mel_filters, max_audio_len]
+        residual_encoding = [batch_size, residual_encoding_dim]
+        speaker = speaker number
+        lang = language number
+        '''
         assert len(list(decoder_inputs.size()))==3
-        to_append = torch.cat([self.speaker_embeds[speaker], self.lang_embeds[lang]], dim=-1)        
+        to_append = torch.cat([self.speaker_embeds[speaker], self.lang_embeds[lang], residual_encoding], dim=-1)        
         to_append = to_append.repeat(decoder_inputs.shape[2],1,1).transpose(0,1).transpose(1,2)
         return torch.cat([decoder_inputs, to_append], dim=1)
 
@@ -410,7 +421,8 @@ class Decoder(nn.Module):
         decoder_input = self.get_go_frame(memory).unsqueeze(0)
         decoder_inputs = self.parse_decoder_inputs(decoder_inputs)
         decoder_inputs = torch.cat((decoder_input, decoder_inputs), dim=0)
-        decoder_inputs = self.concat_speaker_lang_embeds(decoder_inputs, speaker, lang)
+        residual_encoding = self.residual_encoder(decoder_inputs)
+        decoder_inputs = self.concat_speaker_lang_res_embeds(decoder_inputs, speaker, lang, residual_encoding)
         decoder_inputs = self.prenet(decoder_inputs)
 
         self.initialize_decoder_states(
