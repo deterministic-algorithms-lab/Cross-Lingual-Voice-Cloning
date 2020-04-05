@@ -25,9 +25,9 @@ def create_hparams(hparams_string=None, verbose=False):
         # Data Parameters             #
         ################################
         load_mel_from_disk=False,
-        training_files='filelists/ljs_audio_text_train_filelist.txt',
-        validation_files='filelists/ljs_audio_text_val_filelist.txt',
-        text_cleaners=['english_cleaners'],
+        training_files='<train_txt_file_path>',
+        validation_files='<val_txt_file_path>',
+        text_cleaners=['basic_cleaners'],
 
         ################################
         # Audio Parameters             #
@@ -87,9 +87,9 @@ def create_hparams(hparams_string=None, verbose=False):
         ###############################
         # Speaker and Lang Embeddings #
         ###############################
-        speaker_embedding_dim = 64
-        lang_embedding_dim = 3
-        n_langs = 2
+        speaker_embedding_dim = 64,
+        lang_embedding_dim = 3,
+        n_langs = 2,
         n_speakers = 6,
 
         ###############################

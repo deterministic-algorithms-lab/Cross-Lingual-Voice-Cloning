@@ -218,7 +218,7 @@ class Decoder(nn.Module):
         self.speaker_embedding_dim = hparams.encoder_embedding_dim
         self.lang_embedding_dim = hparams.lang_embedding_dim
 
-        self.resdiual_encoding_dim = hparams.resdiual_encoding_dim
+        self.residual_encoding_dim = hparams.residual_encoding_dim
 
         self.prenet = Prenet(
             hparams.n_mel_channels * hparams.n_frames_per_step \
@@ -393,15 +393,16 @@ class Decoder(nn.Module):
 
     def concat_speaker_lang_res_embeds(self, decoder_inputs, speaker, lang, residual_encoding) :
         '''
-        decoder_inputs = [batch_size, n_mel_filters, max_audio_len]
+        decoder_inputs = [max_audio_len, batch_size, n_mel_filters]
         residual_encoding = [batch_size, residual_encoding_dim]
         speaker = speaker number
         lang = language number
         '''
+        decoder_inputs = decoder_inputs.transpose(0,1).transpose(1,2)
         assert len(list(decoder_inputs.size()))==3
-        to_append = torch.cat([self.speaker_embeds[speaker], self.lang_embeds[lang], residual_encoding], dim=-1)        
+        to_append = torch.cat([self.speaker_embeds(speaker), self.lang_embeds(lang), residual_encoding], dim=-1)        
         to_append = to_append.repeat(decoder_inputs.shape[2],1,1).transpose(0,1).transpose(1,2)
-        return torch.cat([decoder_inputs, to_append], dim=1)
+        return torch.cat([decoder_inputs, to_append], dim=1).transpose(2,1).transpose(1,0)
 
     def forward(self, memory, decoder_inputs, memory_lengths, speaker, lang):
         """ Decoder forward pass for training
@@ -498,17 +499,17 @@ class Tacotron2(nn.Module):
         self.postnet = Postnet(hparams)
 
     def parse_batch(self, batch):
-        text_padded, input_lengths, mel_padded, gate_padded, \
-            output_lengths = batch
+        text_padded, input_lengths, mel_padded, gate_padded, output_lengths, speaker, lang = batch
         text_padded = to_gpu(text_padded).long()
         input_lengths = to_gpu(input_lengths).long()
         max_len = torch.max(input_lengths.data).item()
         mel_padded = to_gpu(mel_padded).float()
         gate_padded = to_gpu(gate_padded).float()
         output_lengths = to_gpu(output_lengths).long()
-
+        speaker = to_gpu(speaker).long()
+        lang = to_gpu(lang).long()
         return (
-            (text_padded, input_lengths, mel_padded, max_len, output_lengths),
+            (text_padded, input_lengths, mel_padded, max_len, output_lengths, speaker, lang),
             (mel_padded, gate_padded))
 
     def parse_output(self, outputs, output_lengths=None):
@@ -530,7 +531,9 @@ class Tacotron2(nn.Module):
         embedded_inputs = self.embedding(text_inputs).transpose(1, 2)
 
         encoder_outputs = self.encoder(embedded_inputs, text_lengths)
-
+        encoder_outputs.retain_grad()
+        encoder_outputs.register_hook(lambda x : -x)
+        
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels, memory_lengths=text_lengths, speaker=speaker, lang=lang)
         

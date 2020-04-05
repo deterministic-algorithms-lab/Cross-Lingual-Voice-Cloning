@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+
 class residual_encoder(nn.Module) :
     '''
     Neural network that can be used to parametrize q(z_{l}|x) and q(z_{o}|x)
@@ -6,21 +9,21 @@ class residual_encoder(nn.Module) :
         super(residual_encoder, self).__init__()
         self.conv1 = nn.Conv1d(hparams.n_mel_channels, 512, 3, 1)
         self.bi_lstm = nn.LSTM(512, 256, 2, bidirectional = True, batch_first=True)
-        self.linear = nn.Linear(hparams.n_mel_channels, 32)
-        self.epsilon = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(16), torch.eye(16))
+        self.linear = nn.Linear(512, 32)
+        self.epsilon = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(16, device='cuda:0'), torch.eye(16, device='cuda:0'))
 
     def forward(self, x):
         '''
         x.shape = [batch_size, seq_len, n_mel_channels]
         returns single sample from the distribution q(z_{l}|X) or q(z_{l}|X) of size [batch_size, 16]
         '''
-        x = self.conv1(x)
+        x = self.conv1(x.transpose(2,1)).transpose(2,1)
         output, (_,_) = self.bi_lstm(x)
         seq_len = output.shape[1]
         output = output.sum(dim=1)/seq_len
-        x = self.linear(x)
+        x = self.linear(output)
         mean, log_variance = x[:,:16], x[:,16:]
-        return mean + log_variance*self.epsilon.sample((x.shape[1],))
+        return mean + log_variance*self.epsilon.sample((x.shape[0],))
 
 class residual_encoders(nn.Module) :
     def __init__(self, hparams) :
@@ -30,8 +33,9 @@ class residual_encoders(nn.Module) :
     
     def forward(self, x) :
         '''
-        x.shape = [batch_size, seq_len, n_mel_channels]
+        x.shape = [seq_len, batch_size, n_mel_channels]
         returns concatenation of z_{o} and z_{l} sampled from respective distributions
         '''
+        x = x.transpose(1,0)
         z_l, z_o = self.latent_encoder(x), self.observe_encoder(x)
         return torch.cat([z_l,z_o], dim=1)
