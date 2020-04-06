@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from layers import ConvNorm, LinearNorm
 from utils import to_gpu, get_mask_from_lengths
 from residual_encoder import residual_encoders
+from gradient_reversal import grad_reverse
 
 class LocationLayer(nn.Module):
     def __init__(self, attention_n_filters, attention_kernel_size,
@@ -531,9 +532,9 @@ class Tacotron2(nn.Module):
         embedded_inputs = self.embedding(text_inputs).transpose(1, 2)
 
         encoder_outputs = self.encoder(embedded_inputs, text_lengths)
-        encoder_outputs.retain_grad()
-        encoder_outputs.register_hook(lambda x : -x)
         
+        encoder_outputs = grad_reverse(encoder_outputs)
+
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels, memory_lengths=text_lengths, speaker=speaker, lang=lang)
         
