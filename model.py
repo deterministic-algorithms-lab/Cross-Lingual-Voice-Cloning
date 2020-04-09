@@ -398,10 +398,11 @@ class Decoder(nn.Module):
         residual_encoding = [batch_size, residual_encoding_dim]
         speaker = speaker number
         lang = language number
+        RETURNS: [max_audio_len, batch_size, n_mel_filters+speaker_embed+lang_embed+residual_embed]
         '''
+        speaker_embeds, lang_embeds = self.speaker_embeds(speaker), self.lang_embeds(lang)
         decoder_inputs = decoder_inputs.transpose(0,1).transpose(1,2)
-        assert len(list(decoder_inputs.size()))==3
-        to_append = torch.cat([self.speaker_embeds(speaker), self.lang_embeds(lang), residual_encoding], dim=-1)        
+        to_append = torch.cat([speaker_embeds, lang_embeds, residual_encoding], dim=-1)        
         to_append = to_append.repeat(decoder_inputs.shape[2],1,1).transpose(0,1).transpose(1,2)
         return torch.cat([decoder_inputs, to_append], dim=1).transpose(2,1).transpose(1,0)
 
@@ -444,11 +445,13 @@ class Decoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
-    def inference(self, memory):
+    def inference(self, memory, speaker, lang):
         """ Decoder inference
         PARAMS
         ------
-        memory: Encoder outputs
+        memory: Encoder outputs [batch_size, n_words, encoder_embedding_dim]    
+        decoder_input : - initially(before loop) it is all 0 of size [1, n_mel_channels]
+        mel_output[i].shape == [1,n_mel_channels]
 
         RETURNS
         -------
@@ -462,6 +465,12 @@ class Decoder(nn.Module):
 
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
+            
+            residual_encoding = ______________  #torch.zeros((1,32), device='cuda:0')  #batch_sizeXresidual_encoding_dim
+            
+            decoder_input = decoder_input.unsqueeze(1)
+            decoder_input = self.concat_speaker_lang_res_embeds(decoder_input, speaker, lang, residual_encoding).squeeze(1)
+
             decoder_input = self.prenet(decoder_input)
             mel_output, gate_output, alignment = self.decode(decoder_input)
 
@@ -533,7 +542,7 @@ class Tacotron2(nn.Module):
 
         encoder_outputs = self.encoder(embedded_inputs, text_lengths)
         
-        encoder_outputs = grad_reverse(encoder_outputs)
+        encdr_out_for_spkr_clsfir = grad_reverse(encoder_outputs)
 
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels, memory_lengths=text_lengths, speaker=speaker, lang=lang)
@@ -542,14 +551,15 @@ class Tacotron2(nn.Module):
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
 
         return self.parse_output(
-            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, encoder_outputs, text_lengths],
+            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, encdr_out_for_spkr_clsfir, text_lengths],
             output_lengths)
 
-    def inference(self, inputs):
+    def inference(self, inputs, speaker, language):
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder.inference(embedded_inputs)
+        
         mel_outputs, gate_outputs, alignments = self.decoder.inference(
-            encoder_outputs)
+            encoder_outputs, speaker, language)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
