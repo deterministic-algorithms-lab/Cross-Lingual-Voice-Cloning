@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 class residual_encoder(nn.Module) :
     '''
     Neural network that can be used to parametrize q(z_{l}|x) and q(z_{o}|x)
@@ -36,14 +38,14 @@ class continuous_given_discrete(nn.Module) :
         self.n_disc = n_disc
         self.residual_encoding_dim  = int(hparams.residual_encoding_dim/2)
 
-        self.cont_given_disc_mus    = nn.Parameter(torch.randn((self.n_disc, self.residual_encoding_dim), requires_grad=True))
-        self.cont_given_disc_sigmas = nn.Parameter(torch.ones((self.n_disc, self.residual_encoding_dim), requires_grad=True))
+        self.cont_given_disc_mus    = nn.Parameter(torch.randn((self.n_disc, self.residual_encoding_dim), requires_grad=True, device=device))
+        self.cont_given_disc_sigmas = nn.Parameter(torch.ones((self.n_disc, self.residual_encoding_dim), requires_grad=True, device=device))
         
         self.distrib_lis  = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=True)
         self.distribs     = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=False)
 
     def make_normal_distribs(self, mus, sigmas, make_lis = False) :
-        if list :
+        if make_lis :
             return [torch.distributions.normal.Normal(mus[i], sigmas[i]) for i in range(mus.shape[0])]
         return torch.distributions.normal.Normal(mus, sigmas)
     
@@ -66,19 +68,20 @@ class residual_encoders(nn.Module) :
         self.q_zl_given_X_at_x = None
         self.q_zo_given_X_at_x = None
         
+        self.residual_encoding_dim = hparams.residual_encoding_dim
         self.mcn = hparams.mcn
         
-        self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl), requires_grad=True))
+        self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl), requires_grad=True, device=device))
         self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo)
         self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl)
         self.q_yl_given_X = None
     
-    def calc_q_tilde(sampled_zl) :
+    def calc_q_tilde(self, sampled_zl) :
         K = self.p_zl_given_yl.n_disc
         sampled_zl = sampled_zl.repeat_interleave(K,-2)
-        sampled_zl = sampled_zl.reshape(sampled_zl.shape[0], sampled_zl.shape[1], K, -1)
-        probs = self.p_zl_given_yl.distribs.log_probs(sampled_zl).exp()                       #[mcn, batch_size, K, residual_encoding_dim/2]
+        sampled_zl = sampled_zl.reshape(sampled_zl.shape[0], -1, K, sampled_zl.shape[-1])
+        probs = self.p_zl_given_yl.distribs.log_prob(sampled_zl).exp()                       #[mcn, batch_size, K, residual_encoding_dim/2]
         p_zl_givn_yl = probs.prod(dim=-1)                                                     #[mcn, batch_size, K] 
         ans = p_zl_givn_yl*self.y_l.probs 
         normalization_consts = ans.sum(dim=-1)                                                #[mcn, batch_size]
@@ -93,9 +96,9 @@ class residual_encoders(nn.Module) :
         '''
         x = x.transpose(1,0)
         self.q_zl_given_X_at_x, self.q_zo_given_X_at_x = self.q_zl_given_X(x), self.q_zo_given_X(x)         
-        z_l, z_o = self.q_zl_given_X_at_x.rsample((self.mcn, )), q_zo_given_X_at_x.rsample((self.mcn,)) #[mcn, batch_size, residual_encoding_dim/2]
+        z_l, z_o = self.q_zl_given_X_at_x.rsample((self.mcn, )), self.q_zo_given_X_at_x.rsample((self.mcn,)) #[mcn, batch_size, residual_encoding_dim/2]
         self.calc_q_tilde(z_l)        
-        return torch.cat([z_l,z_o], dim=-1)
+        return torch.cat([z_l,z_o], dim=-1).reshape(-1, self.residual_encoding_dim)
     
     def after_optim_step(self) :
         '''

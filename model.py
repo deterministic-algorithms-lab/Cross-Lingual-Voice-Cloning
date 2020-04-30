@@ -220,7 +220,9 @@ class Decoder(nn.Module):
         self.lang_embedding_dim = hparams.lang_embedding_dim
 
         self.residual_encoding_dim = hparams.residual_encoding_dim
-
+        
+        self.mcn = hparams.mcn
+        
         self.prenet = Prenet(
             hparams.n_mel_channels * hparams.n_frames_per_step \
             + hparams.lang_embedding_dim + hparams.speaker_embedding_dim \
@@ -401,7 +403,8 @@ class Decoder(nn.Module):
         RETURNS: [max_audio_len, batch_size, n_mel_filters+speaker_embed+lang_embed+residual_embed]
         '''
         speaker_embeds, lang_embeds = self.speaker_embeds(speaker), self.lang_embeds(lang)
-        decoder_inputs = decoder_inputs.transpose(0,1).transpose(1,2)
+        decoder_inputs = decoder_inputs.transpose(0,1).transpose(1,2).repeat(self.mcn, 1, 1)
+        speaker_embeds, lang_embeds = speaker_embeds.repeat(self.mcn, 1), lang_embeds.repeat(self.mcn, 1)
         to_append = torch.cat([speaker_embeds, lang_embeds, residual_encoding], dim=-1)        
         to_append = to_append.repeat(decoder_inputs.shape[2],1,1).transpose(0,1).transpose(1,2)
         return torch.cat([decoder_inputs, to_append], dim=1).transpose(2,1).transpose(1,0)
@@ -428,6 +431,10 @@ class Decoder(nn.Module):
         decoder_inputs = self.concat_speaker_lang_res_embeds(decoder_inputs, speaker, lang, residual_encoding)
         decoder_inputs = self.prenet(decoder_inputs)
 
+        memory = memory.repeat(self.mcn,1,1)
+        memory_lengths = memory_lengths.repeat(self.mcn)
+        decoder_input = decoder_input.repeat(1,self.mcn,1)
+        
         self.initialize_decoder_states(
             memory, mask=~get_mask_from_lengths(memory_lengths))
 
@@ -507,6 +514,7 @@ class Tacotron2(nn.Module):
         self.encoder = Encoder(hparams)
         self.decoder = Decoder(hparams)
         self.postnet = Postnet(hparams)
+        self.mcn = hparams.mcn
 
     def parse_batch(self, batch):
         text_padded, input_lengths, mel_padded, gate_padded, output_lengths, speaker, lang = batch
@@ -520,7 +528,7 @@ class Tacotron2(nn.Module):
         lang = to_gpu(lang).long()
         return (
             (text_padded, input_lengths, mel_padded, max_len, output_lengths, speaker, lang),
-            (mel_padded, gate_padded))
+            (mel_padded.repeat(self.mcn,1,1), gate_padded.repeat(self.mcn,1)))
 
     def parse_output(self, outputs, output_lengths=None):
         if self.mask_padding and output_lengths is not None:
@@ -528,6 +536,7 @@ class Tacotron2(nn.Module):
             mask = mask.expand(self.n_mel_channels, mask.size(0), mask.size(1))
             mask = mask.permute(1, 0, 2)
 
+            mask = mask.repeat(self.mcn,1,1)
             outputs[0].data.masked_fill_(mask, 0.0)
             outputs[1].data.masked_fill_(mask, 0.0)
             outputs[2].data.masked_fill_(mask[:, 0, :], 1e3)  # gate energies
