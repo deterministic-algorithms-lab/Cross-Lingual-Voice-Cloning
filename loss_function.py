@@ -1,5 +1,10 @@
 import torch
 from torch import nn 
+from torch.distributions.kl import kl_divergence as kld 
+from torch.distributions.categorical import Categorical
+from torch.distributions.normal import Normal
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class speaker_classifier(nn.Module):
     
@@ -36,7 +41,7 @@ class Tacotron2Loss(nn.Module):
         super(Tacotron2Loss, self).__init__()
         self.speaker_classifier = speaker_classifier(hparams).to(torch.device('cuda: 0'))
 
-    def forward(self, model_output, targets):
+    def forward(self, model_output, targets, re, batched_speakers):
         mel_target, gate_target = targets[0], targets[1]
         mel_target.requires_grad = False
         gate_target.requires_grad = False
@@ -48,6 +53,15 @@ class Tacotron2Loss(nn.Module):
             nn.MSELoss()(mel_out_postnet, mel_target)
         gate_loss = nn.BCEWithLogitsLoss()(gate_out, gate_target)
         
+        kl_loss = torch.zeros((1,), device=device)
+        means, stddevs = re.q_zo_given_X_at_x.mean, re.q_zo_given_X_at_x.stddev
+        for i, speaker in enumerate(batched_speakers) :
+            kl_loss += kld(re.p_zo_given_yo.distrib_lis[speaker], Normal(means[i], stddevs[i])).sum()
+        for i in range(re.p_zl_given_yl.n_disc) :
+            kl_loss += ( re.q_yl_given_X[i]*kld(re.q_zl_given_X_at_x, re.p_zl_given_yl.distrib_lis[i]).sum(dim=1) ).sum()
+        for i in range(re.q_yl_given_X.shape[1]) :
+            kl_loss += kld( Categorical(re.q_yl_given_X[:,i]), re.y_l)
+
         speaker_log_probs = self.speaker_classifier(encoder_outputs, text_lengths)
         speaker_loss = torch.sum(speaker_log_probs)
-        return (mel_loss + gate_loss) + 0.02*speaker_loss
+        return (mel_loss + gate_loss) + 0.02*speaker_loss -kl_loss
