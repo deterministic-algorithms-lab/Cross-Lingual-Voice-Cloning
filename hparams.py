@@ -100,8 +100,10 @@ def create_hparams(hparams_string=None, verbose=False):
         ##############################
         ## Residual Encoder Params  ##
         ##############################
-        residual_encoding_dim = 32          #16 for q(z_l|X) and 16 for q(z_o|X)
-
+        residual_encoding_dim = 32,          #16 for q(z_l|X) and 16 for q(z_o|X)
+        dim_yo = 6,                          #(==n_speakers) dim(y_{o})
+        dim_yl = 10,                         #K
+        mcn = 8                              #n for monte carlo sampling of q(z_l|X)and q(z_o|X)
     )
 
     if hparams_string:
