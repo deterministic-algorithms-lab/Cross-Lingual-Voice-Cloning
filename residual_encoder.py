@@ -10,7 +10,7 @@ class residual_encoder(nn.Module) :
         self.conv1 = nn.Conv1d(hparams.n_mel_channels, 512, 3, 1)
         self.bi_lstm = nn.LSTM(512, 256, 2, bidirectional = True, batch_first=True)
         self.linear = nn.Linear(512, 32)
-        self.residual_encoding_dim = hparams.residual_encoding_dim/2
+        self.residual_encoding_dim = int(hparams.residual_encoding_dim/2)
         #self.epsilon = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(self.residual_encoding_dim, device='cuda:0'), torch.eye(self.residual_encoding_dim, device='cuda:0'))
 
     def forward(self, x):
@@ -34,7 +34,7 @@ class continuous_given_discrete(nn.Module) :
     def __init__(self, hparams, n_disc) :
         super(continuous_given_discrete, self).__init__()
         self.n_disc = n_disc
-        self.residual_encoding_dim  = hparams.residual_encoding_dim/2
+        self.residual_encoding_dim  = int(hparams.residual_encoding_dim/2)
 
         self.cont_given_disc_mus    = nn.Parameter(torch.randn((self.n_disc, self.residual_encoding_dim), requires_grad=True))
         self.cont_given_disc_sigmas = nn.Parameter(torch.ones((self.n_disc, self.residual_encoding_dim), requires_grad=True))
@@ -42,7 +42,7 @@ class continuous_given_discrete(nn.Module) :
         self.distrib_lis  = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=True)
         self.distribs     = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=False)
 
-    def make_normal_distribs(mus, sigmas, make_lis = False) :
+    def make_normal_distribs(self, mus, sigmas, make_lis = False) :
         if list :
             return [torch.distributions.normal.Normal(mus[i], sigmas[i]) for i in range(mus.shape[0])]
         return torch.distributions.normal.Normal(mus, sigmas)
@@ -69,7 +69,7 @@ class residual_encoders(nn.Module) :
         self.mcn = hparams.mcn
         
         self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl), requires_grad=True))
-        self.y_l = torch.distributions.multinomial.Multinomial(self.y_l_probs)
+        self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo)
         self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl)
         self.q_yl_given_X = None
@@ -103,6 +103,6 @@ class residual_encoders(nn.Module) :
         '''
         self.y_l.detach_()
         self.y_l.requires_grad=True
-        self.y_l = torch.distributions.multinomial.Multinomial(self.y_l_probs)
+        self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo.after_optim_step()
         self.p_zl_given_yl.after_optim_step()
