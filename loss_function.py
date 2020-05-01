@@ -4,7 +4,6 @@ from torch.distributions.kl import kl_divergence as kld
 from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class speaker_classifier(nn.Module):
     
@@ -15,7 +14,7 @@ class speaker_classifier(nn.Module):
                                    nn.Softmax(dim=-1))
     
     def parse_outputs(self, out, text_lengths) :
-        mask = torch.arange(out.size(1), device='cuda:0').expand(out.size(0), out.size(1)) < text_lengths.unsqueeze(1)
+        mask = torch.arange(out.size(1), device=out.device).expand(out.size(0), out.size(1)) < text_lengths.unsqueeze(1)
         out = out.permute(2,0,1)
         out = out*mask
         out = out.permute(1,2,0)
@@ -39,7 +38,7 @@ class Tacotron2Loss(nn.Module):
     
     def __init__(self, hparams):
         super(Tacotron2Loss, self).__init__()
-        self.speaker_classifier = speaker_classifier(hparams).to(torch.device('cuda: 0'))
+        self.speaker_classifier = speaker_classifier(hparams)
 
     def forward(self, model_output, targets, re, batched_speakers):
         mel_target, gate_target = targets[0], targets[1]
@@ -53,9 +52,9 @@ class Tacotron2Loss(nn.Module):
             nn.MSELoss()(mel_out_postnet, mel_target)
         gate_loss = nn.BCEWithLogitsLoss()(gate_out, gate_target)
         
-        kl_loss = torch.zeros((1,), device=device)
         means, stddevs = re.q_zo_given_X_at_x.mean, re.q_zo_given_X_at_x.stddev
-        for i, speaker in enumerate(batched_speakers) :
+        kl_loss = kld(re.p_zo_given_yo.distrib_lis[batched_speakers[0]], Normal(means[0], stddevs[0])).sum()
+        for i, speaker in enumerate(batched_speakers[1:], 1) :
             kl_loss += kld(re.p_zo_given_yo.distrib_lis[speaker], Normal(means[i], stddevs[i])).sum()
         for i in range(re.p_zl_given_yl.n_disc) :
             kl_loss += ( re.q_yl_given_X[i]*kld(re.q_zl_given_X_at_x, re.p_zl_given_yl.distrib_lis[i]).sum(dim=1) ).sum()
@@ -64,4 +63,5 @@ class Tacotron2Loss(nn.Module):
 
         speaker_log_probs = self.speaker_classifier(encoder_outputs, text_lengths)
         speaker_loss = torch.sum(speaker_log_probs)
+        
         return (mel_loss + gate_loss) + 0.02*speaker_loss -kl_loss
