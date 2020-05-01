@@ -82,7 +82,7 @@ class residual_encoders(nn.Module) :
         sampled_zl = sampled_zl.repeat_interleave(K,-2)
         sampled_zl = sampled_zl.reshape(sampled_zl.shape[0], -1, K, sampled_zl.shape[-1])
         probs = self.p_zl_given_yl.distribs.log_prob(sampled_zl).exp()                       #[mcn, batch_size, K, residual_encoding_dim/2]
-        p_zl_givn_yl = probs.prod(dim=-1)                                                     #[mcn, batch_size, K] 
+        p_zl_givn_yl = probs.prod(dim=-1)                                                    #[mcn, batch_size, K] 
         ans = p_zl_givn_yl*self.y_l.probs 
         normalization_consts = ans.sum(dim=-1)                                                #[mcn, batch_size]
         ans = ans.permute(2,0,1)/normalization_consts                                         #[K, mcn, batch_size]
@@ -109,3 +109,10 @@ class residual_encoders(nn.Module) :
         self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo.after_optim_step()
         self.p_zl_given_yl.after_optim_step()
+    
+    def infer(self, y_o_idx, y_l_idx=None) :
+        if y_l_idx is None :
+            y_l_idx = self.y_l.sample()
+        z_l = self.p_zl_given_yl.distrib_lis[y_l_idx].sample()
+        z_o = self.p_zo_given_yo.distrib_lis[y_o_idx].sample()
+        return torch.cat([z_l,z_o], dim=-1).unsqueeze(dim=0)

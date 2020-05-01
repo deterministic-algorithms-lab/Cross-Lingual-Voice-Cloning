@@ -466,6 +466,7 @@ class Decoder(nn.Module):
         gate_outputs: gate outputs from the decoder
         alignments: sequence of attention weights from the decoder
         """
+        self.mcn=1
         decoder_input = self.get_go_frame(memory)
 
         self.initialize_decoder_states(memory, mask=None)
@@ -473,7 +474,7 @@ class Decoder(nn.Module):
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
             
-            residual_encoding = ______________  #torch.zeros((1,32), device='cuda:0')  #batch_sizeXresidual_encoding_dim
+            residual_encoding = self.residual_encoder.infer(spekaer)  #torch.zeros((1,32), device='cuda:0')  #batch_sizeXresidual_encoding_dim
             
             decoder_input = decoder_input.unsqueeze(1)
             decoder_input = self.concat_speaker_lang_res_embeds(decoder_input, speaker, lang, residual_encoding).squeeze(1)
@@ -564,6 +565,7 @@ class Tacotron2(nn.Module):
             output_lengths)
 
     def inference(self, inputs, speaker, language):
+        self.mcn=1
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder.inference(embedded_inputs)
         
