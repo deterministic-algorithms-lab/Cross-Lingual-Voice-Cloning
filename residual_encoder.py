@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class residual_encoder(nn.Module) :
     '''
@@ -38,8 +37,8 @@ class continuous_given_discrete(nn.Module) :
         self.n_disc = n_disc
         self.residual_encoding_dim  = int(hparams.residual_encoding_dim/2)
 
-        self.cont_given_disc_mus    = nn.Parameter(torch.randn((self.n_disc, self.residual_encoding_dim), requires_grad=True, device=device))
-        self.cont_given_disc_sigmas = nn.Parameter(torch.ones((self.n_disc, self.residual_encoding_dim), requires_grad=True, device=device))
+        self.cont_given_disc_mus    = nn.Parameter(torch.randn((self.n_disc, self.residual_encoding_dim)))
+        self.cont_given_disc_sigmas = nn.Parameter(torch.ones((self.n_disc, self.residual_encoding_dim)))
         
         self.distrib_lis  = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=True)
         self.distribs     = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=False)
@@ -71,7 +70,7 @@ class residual_encoders(nn.Module) :
         self.residual_encoding_dim = hparams.residual_encoding_dim
         self.mcn = hparams.mcn
         
-        self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl), requires_grad=True, device=device))
+        self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl)))
         self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo)
         self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl)
