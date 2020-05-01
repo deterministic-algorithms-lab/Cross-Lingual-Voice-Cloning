@@ -12,8 +12,7 @@ class residual_encoder(nn.Module) :
         self.bi_lstm = nn.LSTM(512, 256, 2, bidirectional = True, batch_first=True)
         self.linear = nn.Linear(512, 32)
         self.residual_encoding_dim = int(hparams.residual_encoding_dim/2)
-        #self.epsilon = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(self.residual_encoding_dim, device='cuda:0'), torch.eye(self.residual_encoding_dim, device='cuda:0'))
-
+        
     def forward(self, x):
         '''
         x.shape = [batch_size, seq_len, n_mel_channels]
@@ -26,11 +25,13 @@ class residual_encoder(nn.Module) :
         x = self.linear(output)
         mean, log_variance = x[:,:self.residual_encoding_dim], x[:,self.residual_encoding_dim:]
         return torch.distributions.normal.Normal(mean, log_variance)    #Check here if scale_tril=log_variance ?
-        #return mean + log_variance*self.epsilon.sample((x.shape[0],))
-
+        
 class continuous_given_discrete(nn.Module) :
     '''
     Class for p(z_{o}|y_{o}) and p(z_{l}|y_{l})
+    n_disc :- number of discrete possible values for y_{o/l}
+    distrib_lis[i] :- is the distribution over z , p(z|y=i). Total n_disc distribuitons
+    distribs :- p(z|y) for all y. Can be used to sample n_disc z's {1 from each of the n_disc distribution of prev line}, simultaneously. 
     '''
     def __init__(self, hparams, n_disc) :
         super(continuous_given_discrete, self).__init__()
@@ -62,6 +63,8 @@ class continuous_given_discrete(nn.Module) :
 class residual_encoders(nn.Module) :
     def __init__(self, hparams) :
         super(residual_encoders, self).__init__()
+        
+        #Variational Posteriors
         self.q_zl_given_X = residual_encoder(hparams)        #q(z_{l}|X)
         self.q_zo_given_X = residual_encoder(hparams)        #q(z_{o}|X)
         self.q_zl_given_X_at_x = None
@@ -70,18 +73,24 @@ class residual_encoders(nn.Module) :
         self.residual_encoding_dim = hparams.residual_encoding_dim
         self.mcn = hparams.mcn
         
+        #Priors
         self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl)))
         self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo)
         self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl)
+        
         self.q_yl_given_X = None
     
     def calc_q_tilde(self, sampled_zl) :
+        '''
+        Caculates approximation to q_yl_given_X using monte carlo sampling, for each element in a batch.
+        Supposed to be recalculated for each batch.
+        '''
         K = self.p_zl_given_yl.n_disc
         sampled_zl = sampled_zl.repeat_interleave(K,-2)
         sampled_zl = sampled_zl.reshape(sampled_zl.shape[0], -1, K, sampled_zl.shape[-1])
-        probs = self.p_zl_given_yl.distribs.log_prob(sampled_zl).exp()                       #[mcn, batch_size, K, residual_encoding_dim/2]
-        p_zl_givn_yl = probs.prod(dim=-1)                                                    #[mcn, batch_size, K] 
+        probs = self.p_zl_given_yl.distribs.log_prob(sampled_zl).exp()                        #[mcn, batch_size, K, residual_encoding_dim/2]
+        p_zl_givn_yl = probs.prod(dim=-1)                                                     #[mcn, batch_size, K] 
         ans = p_zl_givn_yl*self.y_l.probs 
         normalization_consts = ans.sum(dim=-1)                                                #[mcn, batch_size]
         ans = ans.permute(2,0,1)/normalization_consts                                         #[K, mcn, batch_size]
