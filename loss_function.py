@@ -60,8 +60,9 @@ class Tacotron2Loss(nn.Module):
             kl_loss += ( re.q_yl_given_X[i]*kld(re.q_zl_given_X_at_x, re.p_zl_given_yl.distrib_lis[i]).sum(dim=1) ).sum()
         for i in range(re.q_yl_given_X.shape[1]) :
             kl_loss += kld( Categorical(re.q_yl_given_X[:,i]), re.y_l)
-
+        kl_loss = kl_loss/batched_speakers.shape[0]
+        
         speaker_log_probs = self.speaker_classifier(encoder_outputs, text_lengths)
         speaker_loss = torch.sum(speaker_log_probs)
         
-        return (mel_loss + gate_loss) + 0.02*speaker_loss -kl_loss
+        return (mel_loss + gate_loss) + 0.02*speaker_loss +kl_loss

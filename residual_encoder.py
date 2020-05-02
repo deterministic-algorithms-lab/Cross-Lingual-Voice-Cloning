@@ -51,7 +51,7 @@ class continuous_given_discrete(nn.Module) :
     
     def after_optim_step(self) :
         sigmas = self.cont_given_disc_sigmas.data 
-        sigmas.clamp_(torch.exp(torch.tensor(-2.)), torch.exp(torch.tensor(20.)))
+        sigmas = sigmas.clamp(torch.exp(torch.tensor(-2.)))
         self.cont_given_disc_sigmas.data = sigmas
 
         self.cont_given_disc_mus.detach_()
