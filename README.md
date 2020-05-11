@@ -3,6 +3,12 @@
 
 **DISCLAIMER :- The following code base has been modified according to the paper [Learning to Speak Fluently in a Foreign Language:Multilingual Speech Synthesis and Cross-Language Voice Cloning](https://arxiv.org/pdf/1907.04448.pdf)**
 
+## TODO 
+
+See Projects
+
+## Old Readme.md
+
 PyTorch implementation of [Natural TTS Synthesis By Conditioning
 Wavenet On Mel Spectrogram Predictions](https://arxiv.org/pdf/1712.05884.pdf). 
 
