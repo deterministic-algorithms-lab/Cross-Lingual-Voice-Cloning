@@ -7,6 +7,7 @@ from layers import ConvNorm, LinearNorm
 from utils import to_gpu, get_mask_from_lengths
 from residual_encoder import residual_encoders
 from gradient_reversal import grad_reverse
+from speaker_classifier import speaker_classifier
 
 class LocationLayer(nn.Module):
     def __init__(self, attention_n_filters, attention_kernel_size,
@@ -516,6 +517,7 @@ class Tacotron2(nn.Module):
         self.decoder = Decoder(hparams)
         self.postnet = Postnet(hparams)
         self.mcn = hparams.mcn
+        self.speaker_classifier = speaker_classifier(hparams)
 
     def parse_batch(self, batch):
         text_padded, input_lengths, mel_padded, gate_padded, output_lengths, speaker, lang = batch
@@ -554,6 +556,8 @@ class Tacotron2(nn.Module):
         
         encdr_out_for_spkr_clsfir = grad_reverse(encoder_outputs)
 
+        spkr_clsfir_log_probs = self.speaker_classifier(encdr_out_for_spkr_clsfir, text_lengths)
+
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels, memory_lengths=text_lengths, speaker=speaker, lang=lang)
         
@@ -561,7 +565,7 @@ class Tacotron2(nn.Module):
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
 
         return self.parse_output(
-            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, encdr_out_for_spkr_clsfir, text_lengths],
+            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, spkr_clsfir_log_probs],
             output_lengths)
 
     def inference(self, inputs, speaker, language):
