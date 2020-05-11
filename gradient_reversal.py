@@ -8,7 +8,7 @@ class reverse_grad(torch.autograd.Function) :
     
     @staticmethod
     def backward(ctx, grad_output) :
-        return -grad_output
+        return - (grad_output.clamp(-0.5,0.5))
 
 rg = reverse_grad.apply
 
