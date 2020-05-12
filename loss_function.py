@@ -9,7 +9,8 @@ class Tacotron2Loss(nn.Module):
     
     def __init__(self, hparams):
         super(Tacotron2Loss, self).__init__()
-        
+        self.ce_loss = nn.CrossEntropyLoss(reduction='sum')
+
     def forward(self, model_output, targets, re, batched_speakers):
         mel_target, gate_target = targets[0], targets[1]
         mel_target.requires_grad = False
@@ -32,6 +33,11 @@ class Tacotron2Loss(nn.Module):
             kl_loss += kld( Categorical(re.q_yl_given_X[:,i]), re.y_l)
         kl_loss = kl_loss/batched_speakers.shape[0]
         
-        speaker_loss = torch.sum(spkr_clsfir_log_probs)
+        index_into_spkr_probs = batched_speakers.repeat_interleave(spkr_clsfir_log_probs.shape[1])
+        spkr_clsfir_log_probs = spkr_clsfir_log_probs.reshape(-1, spkr_clsfir_log_probs.shape[-1])
+        mask_index = spkr_clsfir_log_probs.abs().sum(dim=1)!=0
+        spkr_clsfir_log_probs = spkr_clsfir_log_probs[mask_index]
+        index_into_spkr_probs = index_into_spkr_probs[mask_index]
+        speaker_loss = self.ce_loss(spkr_clsfir_log_probs, index_into_spkr_probs)/batched_speakers.shape[0]
         
         return (mel_loss + gate_loss) + 0.02*speaker_loss +kl_loss

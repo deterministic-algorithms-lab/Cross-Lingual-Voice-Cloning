@@ -6,8 +6,7 @@ class speaker_classifier(nn.Module):
     def __init__(self, hparams) :
         super(speaker_classifier, self).__init__()
         self.model = nn.Sequential(nn.Linear(hparams.encoder_embedding_dim, hparams.hidden_sc_dim),
-                                   nn.Linear(hparams.hidden_sc_dim, hparams.n_speakers), 
-                                   nn.Softmax(dim=-1))
+                                   nn.Linear(hparams.hidden_sc_dim, hparams.n_speakers))
     
     def parse_outputs(self, out, text_lengths) :
         mask = torch.arange(out.size(1), device=out.device).expand(out.size(0), out.size(1)) < text_lengths.unsqueeze(1)
@@ -25,6 +24,6 @@ class speaker_classifier(nn.Module):
         output :-
         log probabilities of speaker classification = [batch_size, seq_len, n_speakers]
         '''
-        out = torch.log( self.model(encoder_outputs) )
+        out = self.model(encoder_outputs) 
         out = self.parse_outputs( out, text_lengths )
         return out
