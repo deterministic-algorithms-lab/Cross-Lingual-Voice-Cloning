@@ -556,7 +556,7 @@ class Tacotron2(nn.Module):
         
         encdr_out_for_spkr_clsfir = grad_reverse(encoder_outputs)
 
-        spkr_clsfir_log_probs = self.speaker_classifier(encdr_out_for_spkr_clsfir, text_lengths)
+        spkr_clsfir_logits = self.speaker_classifier(encdr_out_for_spkr_clsfir, text_lengths)
 
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, mels, memory_lengths=text_lengths, speaker=speaker, lang=lang)
@@ -565,7 +565,7 @@ class Tacotron2(nn.Module):
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
 
         return self.parse_output(
-            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, spkr_clsfir_log_probs],
+            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, spkr_clsfir_logits],
             output_lengths)
 
     def inference(self, inputs, speaker, language):
