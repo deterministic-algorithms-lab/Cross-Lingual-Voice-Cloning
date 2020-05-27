@@ -11,6 +11,7 @@ _punctuation = '!\'(),.:;? '
 _special = '-'
 _letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
+#Loop for adding Hindi characters.
 for i in range(2304, 2432) :
     _letters+=chr(i)
 
