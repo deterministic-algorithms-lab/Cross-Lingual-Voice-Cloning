@@ -78,7 +78,8 @@ class residual_encoders(nn.Module) :
         self.mcn = hparams.mcn
         
         #Priors
-        self.y_l_probs = torch.ones((hparams.dim_yl))
+        self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl)))
+        self.y_l_probs.requires_grad = False
         self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo)
         self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl)
@@ -112,6 +113,10 @@ class residual_encoders(nn.Module) :
         self.calc_q_tilde(z_l)        
         return torch.cat([z_l,z_o], dim=-1).reshape(-1, self.residual_encoding_dim)
     
+    def redefine_y_l(self) :
+        '''To be called whenever model is sent to new device'''
+        self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
+
     def after_optim_step(self) :
         '''
         The parameters :- cont_given_disc_mus, sigmas, are altered, so their distributions need to be made again.
