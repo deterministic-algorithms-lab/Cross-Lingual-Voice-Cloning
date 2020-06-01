@@ -78,7 +78,7 @@ class residual_encoders(nn.Module) :
         self.mcn = hparams.mcn
         
         #Priors
-        self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl)))
+        self.y_l_probs = torch.ones((hparams.dim_yl))
         self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo)
         self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl)
