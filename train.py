@@ -73,6 +73,7 @@ def prepare_directories_and_logger(output_directory, log_directory, rank):
 def load_model(hparams):
     model = Tacotron2(hparams).cuda()
     model.decoder.residual_encoder.after_optim_step()
+    model.decoder.residual_encoder.redefine_y_l()
     if hparams.fp16_run:
         model.decoder.attention_layer.score_mask_value = finfo('float16').min
 
