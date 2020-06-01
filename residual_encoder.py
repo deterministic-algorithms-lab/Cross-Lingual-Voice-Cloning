@@ -114,11 +114,8 @@ class residual_encoders(nn.Module) :
     
     def after_optim_step(self) :
         '''
-        The parameters :- cont_given_disc_mus, sigmas, y_l_probs are altered, so their distributions need to be made again.
+        The parameters :- cont_given_disc_mus, sigmas, are altered, so their distributions need to be made again.
         '''
-        self.y_l_probs.detach_()
-        self.y_l_probs.requires_grad=True
-        self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
         self.p_zo_given_yo.after_optim_step()
         self.p_zl_given_yl.after_optim_step()
     
