@@ -22,6 +22,10 @@ The model needs to be provided 2 text files 1 for the purpose of training and 1 
 
 To change the languages, add/remove unicode characters in ```_letters``` variable of ```text/symbols.py``` .
 
+## Inference
+
+For inference using the model , run clvc-infer-gh.ipynb with appropriate speaker and language number.
+
 ## TODO 
 
 See [Projects](https://github.com/Jeevesh8/Cross-Lingual-Voice-Cloning/projects/1)
