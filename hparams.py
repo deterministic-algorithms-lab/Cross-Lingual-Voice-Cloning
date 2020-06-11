@@ -25,6 +25,8 @@ def create_hparams(hparams_string=None, verbose=False):
         # Data Parameters             #
         ################################
         load_mel_from_disk=False,
+        audio_dtype = 'np.int16',                 #Data type of input audio files. If not 'np.int16' ; will be converted to it.
+        use_librosa = False,                      #If you want to use librosa for loading file and automatically resampling to sampling_rate
         training_files='<train_txt_file_path>',
         validation_files='<val_txt_file_path>',
         text_cleaners=['basic_cleaners'],
