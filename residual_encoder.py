@@ -31,15 +31,17 @@ class continuous_given_discrete(nn.Module) :
     Class for p(z_{o}|y_{o}) and p(z_{l}|y_{l})
     n_disc :- number of discrete possible values for y_{o/l}
     distrib_lis[i] :- is the distribution over z , p(z|y=i). Total n_disc distribuitons
+    std_init :- standard deviation is initialized to e^(std_init). And clamped to be >= e^(2*std_init) 
     distribs :- p(z|y) for all y. Can be used to sample n_disc z's {1 from each of the n_disc distribution of prev line}, simultaneously. 
     '''
-    def __init__(self, hparams, n_disc) :
+    def __init__(self, hparams, n_disc, std_init=-1) :
         super(continuous_given_discrete, self).__init__()
         self.n_disc = n_disc
         self.residual_encoding_dim  = int(hparams.residual_encoding_dim/2)
-
+        self.std_init = std_init
+        
         self.cont_given_disc_mus    = nn.Parameter(torch.randn((self.n_disc, self.residual_encoding_dim)))
-        self.cont_given_disc_sigmas = nn.Parameter(torch.ones((self.n_disc, self.residual_encoding_dim)))
+        self.cont_given_disc_sigmas = nn.Parameter(torch.exp(std_init)*torch.ones((self.n_disc, self.residual_encoding_dim)))
         
         self.distrib_lis  = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=True)
         self.distribs     = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=False)
@@ -51,7 +53,7 @@ class continuous_given_discrete(nn.Module) :
     
     def after_optim_step(self) :
         sigmas = self.cont_given_disc_sigmas.data 
-        sigmas = sigmas.clamp(torch.exp(torch.tensor(-2.)))
+        sigmas = sigmas.clamp(torch.exp(torch.tensor(2.)*self.std_init))
         self.cont_given_disc_sigmas.data = sigmas
 
         self.cont_given_disc_mus.detach_()
@@ -81,8 +83,8 @@ class residual_encoders(nn.Module) :
         self.y_l_probs = nn.Parameter(torch.ones((hparams.dim_yl)))
         self.y_l_probs.requires_grad = False
         self.y_l = torch.distributions.categorical.Categorical(self.y_l_probs)
-        self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo)
-        self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl)
+        self.p_zo_given_yo = continuous_given_discrete(hparams, hparams.dim_yo, -2)
+        self.p_zl_given_yl = continuous_given_discrete(hparams, hparams.dim_yl, -1)
         
         self.q_yl_given_X = None
     
