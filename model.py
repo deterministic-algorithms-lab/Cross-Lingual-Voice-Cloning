@@ -318,7 +318,7 @@ class Decoder(nn.Module):
         """
         # (B, n_mel_channels, T_out) -> (B, T_out, n_mel_channels)
         decoder_inputs = decoder_inputs.transpose(1, 2)
-        decoder_inputs = decoder_inputs.view(
+        decoder_inputs = decoder_inputs.reshape(
             decoder_inputs.size(0),
             int(decoder_inputs.size(1)/self.n_frames_per_step), -1)
         # (B, T_out/n_frames_ps, n_mel_channels*n_frames_ps) -> (T_out/n_frames_ps, B, n_mel_channels*n_frames_ps)
@@ -336,7 +336,7 @@ class Decoder(nn.Module):
         RETURNS
         -------
         mel_outputs:
-        gate_outpust: gate output energies
+        gate_outputs: gate output energies
         alignments:
         """
         # (T_out, B) -> (B, T_out)
@@ -344,6 +344,7 @@ class Decoder(nn.Module):
         # (T_out, B) -> (B, T_out)
         gate_outputs = torch.stack(gate_outputs).transpose(0, 1)
         gate_outputs = gate_outputs.contiguous()
+        gate_outputs = gate_outputs.repeat_interleave(self.n_frames_per_step,1)
         # (T_out, B, n_mel_channels) -> (B, T_out, n_mel_channels)
         mel_outputs = torch.stack(mel_outputs).transpose(0, 1).contiguous()
         # decouple frames per step
@@ -397,11 +398,11 @@ class Decoder(nn.Module):
 
     def concat_speaker_lang_res_embeds(self, decoder_inputs, speaker, lang, residual_encoding) :
         '''
-        decoder_inputs = [max_audio_len, batch_size, n_mel_filters]
-        residual_encoding = [batch_size, residual_encoding_dim]
+        decoder_inputs = [max_audio_len, batch_size, n_mel_filters*n_frames_per_step]
+        residual_encoding = [batch_size*mcn, residual_encoding_dim]
         speaker = speaker number
         lang = language number
-        RETURNS: [max_audio_len, batch_size, n_mel_filters+speaker_embed+lang_embed+residual_embed]
+        RETURNS: [max_audio_len, batch_size*mcn, n_mel_filters*n_frames_per_step+speaker_embed+lang_embed+residual_embed]
         '''
         speaker_embeds, lang_embeds = self.speaker_embeds(speaker), self.lang_embeds(lang)
         decoder_inputs = decoder_inputs.transpose(0,1).transpose(1,2).repeat(self.mcn, 1, 1)
@@ -427,8 +428,12 @@ class Decoder(nn.Module):
 
         decoder_input = self.get_go_frame(memory).unsqueeze(0)
         decoder_inputs = self.parse_decoder_inputs(decoder_inputs)
-        decoder_inputs = torch.cat((decoder_input, decoder_inputs), dim=0)
-        residual_encoding = self.residual_encoder(decoder_inputs)
+        decoder_inputs = torch.cat((decoder_input, decoder_inputs), dim=0)      #[seq_len, batch_size, n_mel_channels*n_frames_per_step]
+        
+        flattened_decoder_inputs = decoder_inputs.transpose(0,1)
+        flattened_decoder_inputs = flattened_decoder_inputs.reshape(flattened_decoder_inputs.size(0), -1,  int(decoder_inputs.size(2)/self.n_frames_per_step) ).transpose(0,1)
+        residual_encoding = self.residual_encoder(flattened_decoder_inputs)
+        
         decoder_inputs = self.concat_speaker_lang_res_embeds(decoder_inputs, speaker, lang, residual_encoding)
         decoder_inputs = self.prenet(decoder_inputs)
 
@@ -475,7 +480,7 @@ class Decoder(nn.Module):
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
             
-            residual_encoding = self.residual_encoder.infer(spekaer)  #torch.zeros((1,32), device='cuda:0')  #batch_sizeXresidual_encoding_dim
+            residual_encoding = self.residual_encoder.infer(speaker)  #torch.zeros((1,32), device='cuda:0')  #batch_sizeXresidual_encoding_dim
             
             decoder_input = decoder_input.unsqueeze(1)
             decoder_input = self.concat_speaker_lang_res_embeds(decoder_input, speaker, lang, residual_encoding).squeeze(1)
@@ -489,7 +494,7 @@ class Decoder(nn.Module):
 
             if torch.sigmoid(gate_output.data) > self.gate_threshold:
                 break
-            elif len(mel_outputs) == self.max_decoder_steps:
+            elif len(mel_outputs)*self.n_frames_per_step >= self.max_decoder_steps:
                 print("Warning! Reached max decoder steps")
                 break
 
@@ -537,6 +542,9 @@ class Tacotron2(nn.Module):
         if self.mask_padding and output_lengths is not None:
             mask = ~get_mask_from_lengths(output_lengths)
             mask = mask.expand(self.n_mel_channels, mask.size(0), mask.size(1))
+            if mask.size(2)%self.n_frames_per_step != 0 :
+                to_append = torch.ones( mask.size(0), mask.size(1), (self.n_frames_per_step-mask.size(2)%self.n_frames_per_step) ).bool().to(mask.device)
+                mask = torch.cat([mask, to_append], dim=-1)
             mask = mask.permute(1, 0, 2)
 
             mask = mask.repeat(self.mcn,1,1)
