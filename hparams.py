@@ -81,6 +81,7 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         use_saved_learning_rate=False,
         learning_rate=1e-3,
+        anneal = 0,                             #number of iterations to anneal lr from 0 to 'learning_rate'
         weight_decay=1e-6,
         grad_clip_thresh=1.0,
         batch_size=64,
