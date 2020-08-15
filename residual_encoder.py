@@ -38,10 +38,10 @@ class continuous_given_discrete(nn.Module) :
         super(continuous_given_discrete, self).__init__()
         self.n_disc = n_disc
         self.residual_encoding_dim  = int(hparams.residual_encoding_dim/2)
-        self.std_init = std_init
+        self.std_init = torch.tensor([std_init]).float()
         
         self.cont_given_disc_mus    = nn.Parameter(torch.randn((self.n_disc, self.residual_encoding_dim)))
-        self.cont_given_disc_sigmas = nn.Parameter(torch.exp(std_init)*torch.ones((self.n_disc, self.residual_encoding_dim)))
+        self.cont_given_disc_sigmas = nn.Parameter(torch.exp(self.std_init)*torch.ones((self.n_disc, self.residual_encoding_dim)))
         
         self.distrib_lis  = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=True)
         self.distribs     = self.make_normal_distribs(self.cont_given_disc_mus, self.cont_given_disc_sigmas, make_lis=False)
@@ -53,7 +53,7 @@ class continuous_given_discrete(nn.Module) :
     
     def after_optim_step(self) :
         sigmas = self.cont_given_disc_sigmas.data 
-        sigmas = sigmas.clamp(torch.exp(torch.tensor(2.)*self.std_init))
+        sigmas = sigmas.clamp(float(torch.exp(torch.tensor(2.)*self.std_init).data))
         self.cont_given_disc_sigmas.data = sigmas
 
         self.cont_given_disc_mus.detach_()
