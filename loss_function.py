@@ -17,7 +17,7 @@ class Tacotron2Loss(nn.Module):
         gate_target.requires_grad = False
         gate_target = gate_target.view(-1, 1)
 
-        mel_out, mel_out_postnet, gate_out, _, spkr_clsfir_logits = model_output
+        mel_out, mel_out_postnet, gate_out, alignments, spkr_clsfir_logits = model_output
         gate_out = gate_out.view(-1, 1)
         mel_loss = nn.MSELoss()(mel_out, mel_target) + \
             nn.MSELoss()(mel_out_postnet, mel_target)
@@ -40,4 +40,6 @@ class Tacotron2Loss(nn.Module):
         index_into_spkr_logits = index_into_spkr_logits[mask_index]
         speaker_loss = self.ce_loss(spkr_clsfir_logits, index_into_spkr_logits)/batched_speakers.shape[0]
         
+        
+
         return (mel_loss + gate_loss) + 0.02*speaker_loss +kl_loss

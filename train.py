@@ -69,12 +69,11 @@ def prepare_directories_and_logger(output_directory, log_directory, rank):
         logger = None
     return logger
 
-def anneal_lr(optimizer, hparams) :
-    if optimizer.lr>=hparams.learning_rate :
-        return
+def anneal_lr(learning_rate, hparams) :
+    if learning_rate>=hparams.learning_rate :
+        return learning_rate
     else :
-        optimizer.lr = optimizer.lr + (hparams.learning_rate/hparams.anneal)
-        return
+        return learning_rate+(hparams.learning_rate/hparams.anneal)
 
 def load_model(hparams):
     model = Tacotron2(hparams).cuda()
@@ -185,8 +184,8 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     torch.cuda.manual_seed(hparams.seed)
 
     model = load_model(hparams)
-    learning_rate = hparams.learning_rate
-    optimizer = torch.optim.Adam(model.parameters(), lr=0 if hparams.anneal else learning_rate,
+    learning_rate = 0 if hparams.anneal else hparams.learning_rate
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
                                  weight_decay=hparams.weight_decay)
 
     if hparams.fp16_run:
@@ -253,7 +252,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                     model.parameters(), hparams.grad_clip_thresh)
 
             optimizer.step()
-            anneal_lr(optimizer, hparams)
+            learning_rate = anneal_lr(learning_rate, hparams)
             model.decoder.residual_encoder.after_optim_step()
             
             if not is_overflow and rank == 0:
