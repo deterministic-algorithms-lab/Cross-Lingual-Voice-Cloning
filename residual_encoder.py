@@ -100,7 +100,7 @@ class residual_encoders(nn.Module) :
         p_zl_givn_yl = probs.prod(dim=-1)                                                     #[mcn, batch_size, K] 
         ans = p_zl_givn_yl*self.y_l.probs 
         normalization_consts = ans.sum(dim=-1)                                                #[mcn, batch_size]
-        ans = ans.permute(2,0,1)/normalization_consts                                         #[K, mcn, batch_size]
+        ans = ans.permute(2,0,1)/(normalization_consts+1e-12)                                 #[K, mcn, batch_size]
         self.q_yl_given_X = ans.sum(dim=1)/self.mcn                                           #[K, batch_size]
                                                                                     
     def forward(self, x) :

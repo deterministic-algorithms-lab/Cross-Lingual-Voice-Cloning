@@ -30,7 +30,7 @@ class Tacotron2Loss(nn.Module):
         for i in range(re.p_zl_given_yl.n_disc) :
             kl_loss += ( re.q_yl_given_X[i]*kld(re.q_zl_given_X_at_x, re.p_zl_given_yl.distrib_lis[i]).sum(dim=1) ).sum()
         for i in range(re.q_yl_given_X.shape[1]) :
-            kl_loss += kld( Categorical(re.q_yl_given_X[:,i]), re.y_l)
+            kl_loss += kld( Categorical(re.q_yl_given_X[:,i]+1e-12), re.y_l)
         kl_loss = kl_loss/batched_speakers.shape[0]
         
         index_into_spkr_logits = batched_speakers.repeat_interleave(spkr_clsfir_logits.shape[1])
