@@ -26,7 +26,7 @@ class Tacotron2Loss(nn.Module):
         means, stddevs = re.q_zo_given_X_at_x.mean, re.q_zo_given_X_at_x.stddev
         kl_loss = kld(re.p_zo_given_yo.distrib_lis[batched_speakers[0]], Normal(means[0], stddevs[0])).sum()
         for i, speaker in enumerate(batched_speakers[1:], 1) :
-            kl_loss += kld(re.p_zo_given_yo.distrib_lis[speaker], Normal(means[i], stddevs[i])).sum()
+            kl_loss += kld(Normal(means[i], stddevs[i]), re.p_zo_given_yo.distrib_lis[speaker]).sum()
         for i in range(re.p_zl_given_yl.n_disc) :
             kl_loss += ( re.q_yl_given_X[i]*kld(re.q_zl_given_X_at_x, re.p_zl_given_yl.distrib_lis[i]).sum(dim=1) ).sum()
         for i in range(re.q_yl_given_X.shape[1]) :
