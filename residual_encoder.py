@@ -6,12 +6,13 @@ class residual_encoder(nn.Module) :
     '''
     Neural network that can be used to parametrize q(z_{l}|x) and q(z_{o}|x)
     '''
-    def __init__(self, hparams):
+    def __init__(self, hparams, log_min_std_dev=-1):
         super(residual_encoder, self).__init__()
         self.conv1 = nn.Conv1d(hparams.n_mel_channels, 512, 3, 1)
         self.bi_lstm = nn.LSTM(512, 256, 2, bidirectional = True, batch_first=True)
         self.linear = nn.Linear(512, 32)
         self.residual_encoding_dim = int(hparams.residual_encoding_dim/2)
+        self.register_buffer('min_std_dev', torch.exp(torch.tensor([log_min_std_dev]).float()) )
         
     def forward(self, x):
         '''
@@ -24,7 +25,8 @@ class residual_encoder(nn.Module) :
         output = output.sum(dim=1)/seq_len
         x = self.linear(output)
         mean, log_variance = x[:,:self.residual_encoding_dim], x[:,self.residual_encoding_dim:]
-        return torch.distributions.normal.Normal(mean, log_variance)    #Check here if scale_tril=log_variance ?
+        std_dev = torch.sqrt(torch.exp(log_variance))
+        return  torch.distributions.normal.Normal(mean,torch.max(std_dev, self.min_std_dev))    #Check here if scale_tril=log_variance ?
         
 class continuous_given_discrete(nn.Module) :
     '''
@@ -71,8 +73,8 @@ class residual_encoders(nn.Module) :
         super(residual_encoders, self).__init__()
         
         #Variational Posteriors
-        self.q_zl_given_X = residual_encoder(hparams)        #q(z_{l}|X)
-        self.q_zo_given_X = residual_encoder(hparams)        #q(z_{o}|X)
+        self.q_zl_given_X = residual_encoder(hparams, -2)        #q(z_{l}|X)
+        self.q_zo_given_X = residual_encoder(hparams, -4)        #q(z_{o}|X)
         self.q_zl_given_X_at_x = None
         self.q_zo_given_X_at_x = None
         
@@ -97,10 +99,10 @@ class residual_encoders(nn.Module) :
         sampled_zl = sampled_zl.repeat_interleave(K,-2)
         sampled_zl = sampled_zl.reshape(sampled_zl.shape[0], -1, K, sampled_zl.shape[-1])
         probs = self.p_zl_given_yl.distribs.log_prob(sampled_zl).exp()                        #[mcn, batch_size, K, residual_encoding_dim/2]
-        p_zl_givn_yl = probs.prod(dim=-1)                                                     #[mcn, batch_size, K] 
+        p_zl_givn_yl = probs.double().prod(dim=-1)                                                     #[mcn, batch_size, K] 
         ans = p_zl_givn_yl*self.y_l.probs 
         normalization_consts = ans.sum(dim=-1)                                                #[mcn, batch_size]
-        ans = ans.permute(2,0,1)/(normalization_consts+1e-12)                                 #[K, mcn, batch_size]
+        ans = ans.permute(2,0,1)/(normalization_consts)                                       #[K, mcn, batch_size]
         self.q_yl_given_X = ans.sum(dim=1)/self.mcn                                           #[K, batch_size]
                                                                                     
     def forward(self, x) :
