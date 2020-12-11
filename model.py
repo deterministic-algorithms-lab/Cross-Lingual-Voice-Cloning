@@ -217,7 +217,7 @@ class Decoder(nn.Module):
         self.p_attention_dropout = hparams.p_attention_dropout
         self.p_decoder_dropout = hparams.p_decoder_dropout
         
-        self.speaker_embedding_dim = hparams.encoder_embedding_dim
+        self.speaker_embedding_dim = hparams.speaker_embedding_dim
         self.lang_embedding_dim = hparams.lang_embedding_dim
 
         self.residual_encoding_dim = hparams.residual_encoding_dim
